@@ -6,7 +6,7 @@ import os
 app = FastAPI()
 
 MODEL_PATH = "models/distilgpt2-q4_k_m.gguf"
-LLAMA_BIN = "llama.cpp/llama-cli"
+LLAMA_BIN = "llama.cpp/main"
 
 class Prompt(BaseModel):
     text: str

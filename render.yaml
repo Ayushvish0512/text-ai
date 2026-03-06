@@ -1,19 +1,42 @@
 services:
   - type: web
-    name: tiny-llm
+    name: tiny-llm-api
     env: python
     plan: free
+    region: oregon
     buildCommand: |
-      pip install -r requirements.txt
-
+      set -e
+      echo "Installing Python dependencies..."
+      pip install --no-cache-dir -r requirements.txt
+      
+      echo "Creating models directory..."
       mkdir -p models
-
-      # Download model directly from HuggingFace
+      
+      echo "Downloading distilgpt2 model (35MB)..."
       curl -L -o models/distilgpt2-q4_k_m.gguf \
-      https://huggingface.co/Crataco/distilgpt2-82M-GGUF/resolve/main/distilgpt2-q4_k_m.gguf
-
+        https://huggingface.co/Crataco/distilgpt2-82M-GGUF/resolve/main/distilgpt2-q4_k_m.gguf
+      
+      echo "Cloning llama.cpp..."
+      if [ ! -d "llama.cpp" ]; then
+        git clone --depth 1 https://github.com/ggerganov/llama.cpp.git
+      fi
+      
+      echo "Building llama.cpp (minimal config)..."
       cd llama.cpp
-      make clean
-      make LLAMA_NATIVE=OFF LLAMA_OPENBLAS=OFF -j2
-
+      make clean || true
+      make llama-cli LLAMA_NO_ACCELERATE=1 LLAMA_NO_METAL=1 LLAMA_OPENBLAS=0 LLAMA_CURL=0 -j2
+      
+      echo "Build complete!"
+      ls -lh llama-cli || echo "Warning: llama-cli not found"
+      
     startCommand: bash start.sh
+    
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: MALLOC_TRIM_THRESHOLD_
+        value: "100000"
+      - key: PYTHONDONTWRITEBYTECODE
+        value: "1"
+    
+    healthCheckPath: /

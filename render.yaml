@@ -29,7 +29,7 @@ services:
       echo "Build complete!"
       ls -lh llama-cli || echo "Warning: llama-cli not found"
       
-    startCommand: bash start.sh
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT --workers 1 --limit-concurrency 2 --timeout-keep-alive 5 --log-level info --no-access-log
     
     envVars:
       - key: PYTHONUNBUFFERED

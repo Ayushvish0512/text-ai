@@ -48,7 +48,7 @@ async def generate(request: Request):
             }
         }
         
-        response = requests.post(HF_API_URL, json=payload, headers=headers, timeout=60)
+        response = requests.post(HF_API_URL, json=payload, headers=headers, timeout=580)
         
         if response.status_code == 200:
             result = response.json()

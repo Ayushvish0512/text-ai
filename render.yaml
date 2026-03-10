@@ -5,38 +5,11 @@ services:
     plan: free
     region: oregon
     buildCommand: |
-      set -e
-      echo "Installing Python dependencies..."
       pip install --no-cache-dir -r requirements.txt
-      
-      echo "Creating models directory..."
-      mkdir -p models
-      
-      echo "Downloading TinyStories model (1MB)..."
-      curl -L -o models/stories260K.gguf \
-        https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories260K.gguf
-      
-      echo "Cloning llama.cpp..."
-      rm -rf llama.cpp
-      git clone --depth 1 https://github.com/ggerganov/llama.cpp.git
-      
-      echo "Building llama.cpp with CMake..."
-      cd llama.cpp
-      cmake -B build -DGGML_NATIVE=OFF -DGGML_CUDA=OFF -DGGML_METAL=OFF
-      cmake --build build --config Release -j 2
-      cp build/bin/llama-cli llama-cli
-      
-      echo "Build complete!"
-      ls -lh llama-cli models/*.gguf
-      
-    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT --workers 1 --limit-concurrency 2 --timeout-keep-alive 5 --log-level info --no-access-log
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
     
     envVars:
       - key: PYTHONUNBUFFERED
-        value: "1"
-      - key: MALLOC_TRIM_THRESHOLD_
-        value: "100000"
-      - key: PYTHONDONTWRITEBYTECODE
         value: "1"
     
     healthCheckPath: /

@@ -16,7 +16,7 @@ app = FastAPI(
     openapi_url=None
 )
 
-MODEL_PATH = "models/distilgpt2-q4_k_m.gguf"
+MODEL_PATH = "models/stories260K.gguf"
 LLAMA_BIN = "./llama.cpp/llama-cli"
 
 # Verify model exists on startup
@@ -64,14 +64,14 @@ async def generate(request: Request):
                     "-p", text,
                     "-n", str(max_length),
                     "--temp", "0.7",
-                    "--ctx-size", "128",
+                    "--ctx-size", "64",
                     "--threads", "1",
                     "--no-display-prompt",
                     "--log-disable"
                 ],
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=120
             )
         )
         

@@ -1,13 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-import subprocess
+import requests
 import os
-import asyncio
-import logging
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Tiny LLM API",
@@ -16,30 +10,20 @@ app = FastAPI(
     openapi_url=None
 )
 
-MODEL_PATH = "models/stories260K.gguf"
-LLAMA_BIN = "./llama.cpp/llama-cli"
-
-# Verify model exists on startup
-@app.on_event("startup")
-async def startup_event():
-    if not os.path.exists(MODEL_PATH):
-        logger.error(f"Model not found at {MODEL_PATH}")
-    if not os.path.exists(LLAMA_BIN):
-        logger.error(f"llama-cli not found at {LLAMA_BIN}")
-    logger.info("Server started successfully")
+# Hugging Face Inference API - using 0.5B model
+HF_API_URL = "https://api-inference.huggingface.co/models/microsoft/phi-1"
+HF_API_KEY = os.environ.get("HF_API_KEY", "")
 
 @app.get("/")
 async def health():
-    """Health check endpoint"""
     return {
         "status": "ok",
-        "model": "distilgpt2-82M-q4",
+        "model": "microsoft/phi-1 (0.5B params)",
         "memory_optimized": True
     }
 
 @app.post("/generate")
 async def generate(request: Request):
-    """Generate text completion"""
     try:
         data = await request.json()
         text = data.get("text", "").strip()
@@ -51,71 +35,47 @@ async def generate(request: Request):
                 status_code=400
             )
         
-        logger.info(f"Generating text for prompt: {text[:50]}...")
+        headers = {}
+        if HF_API_KEY:
+            headers["Authorization"] = f"Bearer {HF_API_KEY}"
         
-        # Run llama.cpp in thread pool
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
-            None,
-            lambda: subprocess.run(
-                [
-                    LLAMA_BIN,
-                    "-m", MODEL_PATH,
-                    "-p", text,
-                    "-n", str(max_length),
-                    "--temp", "0.7",
-                    "--ctx-size", "64",
-                    "--threads", "1",
-                    "--no-display-prompt",
-                    "--log-disable"
-                ],
-                capture_output=True,
-                text=True,
-                timeout=120
-            )
-        )
-        
-        if result.returncode != 0:
-            logger.error(f"llama.cpp error: {result.stderr}")
-            return JSONResponse(
-                {"error": "generation failed", "details": result.stderr[:200]},
-                status_code=500
-            )
-        
-        output = result.stdout.strip()
-        logger.info(f"Generated {len(output)} characters")
-        
-        return {
-            "response": output,
-            "prompt": text,
-            "length": len(output)
+        payload = {
+            "inputs": text,
+            "parameters": {
+                "max_new_tokens": max_length,
+                "temperature": 0.7,
+                "return_full_text": False
+            }
         }
         
-    except asyncio.TimeoutError:
-        logger.error("Generation timeout")
+        response = requests.post(HF_API_URL, json=payload, headers=headers, timeout=60)
+        
+        if response.status_code == 200:
+            result = response.json()
+            generated_text = result[0]['generated_text'] if isinstance(result, list) else result.get('generated_text', '')
+            return {
+                "response": generated_text,
+                "prompt": text,
+                "length": len(generated_text)
+            }
+        else:
+            return JSONResponse(
+                {"error": f"API error: {response.status_code}", "details": response.text},
+                status_code=response.status_code
+            )
+            
+    except requests.Timeout:
         return JSONResponse(
-            {"error": "request timeout - try shorter prompt or max_length"},
+            {"error": "request timeout"},
             status_code=504
         )
-    except ValueError as e:
-        return JSONResponse(
-            {"error": f"invalid input: {str(e)}"},
-            status_code=400
-        )
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
         return JSONResponse(
-            {"error": "internal server error"},
+            {"error": str(e)},
             status_code=500
         )
 
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=port,
-        workers=1,
-        log_level="info"
-    )
+    uvicorn.run(app, host="0.0.0.0", port=port)

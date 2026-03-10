@@ -12,22 +12,22 @@ services:
       echo "Creating models directory..."
       mkdir -p models
       
-      echo "Downloading distilgpt2 model (35MB)..."
-      curl -L -o models/distilgpt2-q4_k_m.gguf \
-        https://huggingface.co/Crataco/distilgpt2-82M-GGUF/resolve/main/distilgpt2-q4_k_m.gguf
+      echo "Downloading TinyStories model (1MB)..."
+      curl -L -o models/stories260K.gguf \
+        https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories260K.gguf
       
       echo "Cloning llama.cpp..."
-      if [ ! -d "llama.cpp" ]; then
-        git clone --depth 1 https://github.com/ggerganov/llama.cpp.git
-      fi
+      rm -rf llama.cpp
+      git clone --depth 1 https://github.com/ggerganov/llama.cpp.git
       
-      echo "Building llama.cpp (minimal config)..."
+      echo "Building llama.cpp with CMake..."
       cd llama.cpp
-      make clean || true
-      make llama-cli LLAMA_NO_ACCELERATE=1 LLAMA_NO_METAL=1 LLAMA_OPENBLAS=0 LLAMA_CURL=0 -j2
+      cmake -B build -DGGML_NATIVE=OFF -DGGML_CUDA=OFF -DGGML_METAL=OFF
+      cmake --build build --config Release -j 2
+      cp build/bin/llama-cli llama-cli
       
       echo "Build complete!"
-      ls -lh llama-cli || echo "Warning: llama-cli not found"
+      ls -lh llama-cli models/*.gguf
       
     startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT --workers 1 --limit-concurrency 2 --timeout-keep-alive 5 --log-level info --no-access-log
     

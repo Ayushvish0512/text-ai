@@ -42,9 +42,9 @@ def load_model():
                     model_name,
                     low_cpu_mem_usage=True,
                     load_in_8bit=True,  # 8-bit quantization
-                    device_map="auto"  # Automatically place layers
+                    device_map="cpu"  # Use CPU only for Render compatibility
                 )
-                logger.info("Model loaded with 8-bit quantization")
+                logger.info("Model loaded with 8-bit quantization (50% memory savings)")
             except Exception as e:
                 logger.warning(f"8-bit quantization failed: {e}. Falling back to float16.")
                 # Fallback to float16

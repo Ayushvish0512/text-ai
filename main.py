@@ -16,8 +16,8 @@ app = FastAPI(
 )
 
 # Memory limits for Render free tier
-MAX_INPUT_LENGTH = 2000  # characters
-MAX_GENERATION_LENGTH = 300  # tokens
+MAX_INPUT_LENGTH = 1000  # characters (reduced from 2000)
+MAX_GENERATION_LENGTH = 150  # tokens (reduced from 300)
 MAX_MEMORY_MB = 450  # Stay under 500MB
 
 class ArticleInput(BaseModel):

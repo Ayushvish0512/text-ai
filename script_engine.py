@@ -1,5 +1,5 @@
 """
-Script generation engine combining rule-based logic + AI model.
+Script generation engine optimized for Render memory limits.
 """
 from model_loader import load_model, check_and_unload_idle
 import logging
@@ -7,13 +7,14 @@ import gc
 
 logger = logging.getLogger(__name__)
 
-def generate_script(article_text: str, max_length: int = 200) -> str:
+def generate_script(article_text: str, max_length: int = 150) -> str:
     """
     Generate video script from article text.
+    Optimized for memory efficiency on Render free tier.
     
     Args:
-        article_text: Input article text
-        max_length: Maximum tokens to generate
+        article_text: Input article text (max 1000 chars)
+        max_length: Maximum tokens to generate (max 150)
     
     Returns:
         Generated script text
@@ -25,23 +26,22 @@ def generate_script(article_text: str, max_length: int = 200) -> str:
         # Load model (lazy loading)
         tokenizer, model = load_model()
         
-        # Create prompt for script generation
-        prompt = f"""Convert this article into an engaging video script with hook, context, and call-to-action.
+        # Create prompt for script generation (shorter for memory)
+        prompt = f"""Create a short video script from this article:
 
-Article:
-{article_text[:500]}
+{article_text[:300]}
 
-Video Script:"""
+Script:"""
         
         # Tokenize input
         inputs = tokenizer(
             prompt,
             return_tensors="pt",
             truncation=True,
-            max_length=512
+            max_length=256  # Shorter for memory
         )
         
-        logger.info("Generating script...")
+        logger.info(f"Generating script ({max_length} tokens max)...")
         
         # Generate script with memory-efficient settings
         outputs = model.generate(
@@ -51,15 +51,18 @@ Video Script:"""
             do_sample=True,
             top_p=0.9,
             pad_token_id=tokenizer.eos_token_id,
-            no_repeat_ngram_size=2,  # Reduce repetition
-            repetition_penalty=1.1,   # Encourage diversity
+            no_repeat_ngram_size=2,
+            repetition_penalty=1.1,
         )
         
         # Decode output
         result = tokenizer.decode(outputs[0], skip_special_tokens=True)
         
-        # Extract only the generated part (after prompt)
-        script = result.split("Video Script:")[-1].strip()
+        # Extract only the generated part (after "Script:")
+        if "Script:" in result:
+            script = result.split("Script:")[-1].strip()
+        else:
+            script = result.strip()
         
         # Clean up tensors to free memory
         del inputs

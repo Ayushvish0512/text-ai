@@ -26,6 +26,7 @@ def load_model():
         
         try:
             from transformers import AutoTokenizer, AutoModelForCausalLM
+            import torch
             
             # Use distilgpt2 - smallest GPT2 variant
             model_name = "distilgpt2"
@@ -34,11 +35,25 @@ def load_model():
             tokenizer = AutoTokenizer.from_pretrained(model_name)
             
             logger.info(f"Loading model: {model_name}")
-            model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                low_cpu_mem_usage=True,  # Memory optimization
-                torch_dtype="auto"  # Auto-select dtype for memory efficiency
-            )
+            # Try to load with 8-bit quantization for maximum memory savings
+            try:
+                # First try with 8-bit quantization (saves ~50% memory)
+                model = AutoModelForCausalLM.from_pretrained(
+                    model_name,
+                    low_cpu_mem_usage=True,
+                    load_in_8bit=True,  # 8-bit quantization
+                    device_map="auto"  # Automatically place layers
+                )
+                logger.info("Model loaded with 8-bit quantization")
+            except Exception as e:
+                logger.warning(f"8-bit quantization failed: {e}. Falling back to float16.")
+                # Fallback to float16
+                model = AutoModelForCausalLM.from_pretrained(
+                    model_name,
+                    low_cpu_mem_usage=True,
+                    dtype=torch.float16  # Use half precision
+                )
+                logger.info("Model loaded with float16 (fallback)")
             
             # Set pad token
             if tokenizer.pad_token is None:

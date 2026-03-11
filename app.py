@@ -11,7 +11,7 @@ app = FastAPI(
 )
 
 # Hugging Face Inference API - using 0.5B model
-HF_API_URL = "https://api-inference.huggingface.co/models/microsoft/phi-1"
+HF_API_URL = "https://router.huggingface.co/models/microsoft/phi-1"
 HF_API_KEY = os.environ.get("HF_API_KEY", "")
 
 @app.get("/")

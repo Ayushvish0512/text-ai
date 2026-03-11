@@ -1,15 +1,19 @@
 services:
   - type: web
-    name: tiny-llm-api
+    name: script-ai-api
     env: python
     plan: free
     region: oregon
     buildCommand: |
       pip install --no-cache-dir -r requirements.txt
-    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    startCommand: bash start.sh
     
     envVars:
       - key: PYTHONUNBUFFERED
         value: "1"
+      - key: TRANSFORMERS_CACHE
+        value: "/tmp/transformers_cache"
+      - key: HF_HOME
+        value: "/tmp/huggingface"
     
-    healthCheckPath: /
+    healthCheckPath: /health

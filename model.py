@@ -2,45 +2,63 @@
 
 import os
 import sys
+import gc
 
-MODEL_PATH = os.path.join("models", "tinyllama.gguf")
-FILE_ID = "1Q_PILsxyMDTK8yyF0j--eMzbeLN-YiMK"
-
+# Constants
+MODEL_PATH = os.path.join("models", "qwen2.5-0.5b-instruct-q2_k.gguf")
+FILE_ID = "1iwluL_LzkdMxx7VgUw3gaCxDectPCTo8"
 
 def download_model():
+    """
+    Downloads the model if not present.
+    """
     if os.path.exists(MODEL_PATH):
-        size = os.path.getsize(MODEL_PATH)
-        if size > 10 * 1024 * 1024:
-            print("Model already present.")
+        if os.path.getsize(MODEL_PATH) > 10 * 1024 * 1024:
             return
-        else:
-            print("Existing model file looks invalid, re-downloading...")
-            os.remove(MODEL_PATH)
+        os.remove(MODEL_PATH)
 
     os.makedirs("models", exist_ok=True)
-    print("Downloading model from Google Drive...")
-
-    import gdown
-    url = f"https://drive.google.com/uc?id={FILE_ID}"
-    gdown.download(url, MODEL_PATH, quiet=False, fuzzy=True)
-
-    if not os.path.exists(MODEL_PATH) or os.path.getsize(MODEL_PATH) < 10 * 1024 * 1024:
-        print("Download failed or file is invalid.")
+    print("Model file missing. Downloading from Google Drive...")
+    
+    try:
+        import gdown
+        url = f"https://drive.google.com/uc?id={FILE_ID}"
+        gdown.download(url, MODEL_PATH, quiet=False, fuzzy=True)
+    except ImportError:
+        print("Error: gdown not installed. Please install it or place the model manually.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Download failed: {e}")
         sys.exit(1)
 
-    print(f"Download complete: {os.path.getsize(MODEL_PATH) // (1024*1024)} MB")
-
-
 def initialize_model():
-    download_model()
+    """
+    Load the model with extreme memory constraints for Render's 400MB limit.
+    """
+    # Auto-download if missing
+    if not os.path.exists(MODEL_PATH):
+        download_model()
+
+    gc.collect()
 
     from llama_cpp import Llama
-    print("Loading model...")
-    llm = Llama(
-        model_path=MODEL_PATH,
-        n_ctx=512,
-        n_threads=2,
-        use_mlock=False
-    )
-    print("Model loaded.")
-    return llm
+    
+    # RAM Optimizations:
+    # n_ctx=512: Balanced for prompt/answer space.
+    # n_batch=32: Small batch to prevent spikes.
+    try:
+        llm = Llama(
+            model_path=MODEL_PATH,
+            n_ctx=512,           
+            n_batch=32,         
+            n_threads=1,
+            use_mlock=False,
+            use_mmap=True,      
+            verbose=False,
+            logits_all=False
+        )
+        print("Model loaded successfully.")
+        return llm
+    except Exception as e:
+        print(f"Critical error loading model: {e}")
+        sys.exit(1)

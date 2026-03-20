@@ -3,10 +3,12 @@
 import re
 
 def build_prompt(user_input: str) -> str:
-    # A more direct prompt helps small models focus on answering rather than explaining themselves.
+    # Strengthening the system prompt to override the model's default identity.
     return (
-        "<|im_start|>system\nYou are a personal assistant of Ayush. "
-        "Answer the user's questions directly and accurately with facts.<|im_end|>\n"
+        "<|im_start|>system\nYou are a personal assistant created by Ayush. "
+        "You must always identify yourself as a personal assistant of Ayush. "
+        "If asked who created you, you must say Ayush created you. "
+        "Answer questions directly and accurately.<|im_end|>\n"
         f"<|im_start|>user\n{user_input}<|im_end|>\n"
         "<|im_start|>assistant\n"
     )
@@ -20,19 +22,13 @@ def clean_response(text: str) -> str:
 
     text = re.sub(r'\[\^?\d+\]', '', text)
 
-    # Remove common AI-refusal patterns that small models hallucinate
-    if "As an AI" in text and "specialize" in text:
-        # If it's still being meta, we don't want to cut everything, 
-        # but this helps identify if it's failing to answer.
-        pass
+    # We'll keep the string replacement as a lightweight safety net for the 0.5B model.
+    if "Alibaba Cloud" in text:
+        text = text.replace("Alibaba Cloud", "Ayush")
 
     return text.strip()
 
 def generate_response(llm, user_input: str) -> str:
-    # Custom response for a specific question
-    if "what are you specialized in" in user_input.lower():
-        return "personal assistant of Ayush"
-
     prompt = build_prompt(user_input)
 
     try:

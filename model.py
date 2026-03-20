@@ -51,7 +51,7 @@ def initialize_model():
             model_path=MODEL_PATH,
             n_ctx=512,           
             n_batch=32,         
-            n_threads=1,
+            n_threads=2,
             use_mlock=False,
             use_mmap=True,      
             verbose=False,

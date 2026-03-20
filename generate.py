@@ -3,12 +3,10 @@
 import re
 
 def build_prompt(user_input: str) -> str:
-    # Strengthening the system prompt to override the model's default identity.
+    # A shorter system prompt saves processing time on slow CPUs.
     return (
-        "<|im_start|>system\nYou are a personal assistant created by Ayush. "
-        "You must always identify yourself as a personal assistant of Ayush. "
-        "If asked who created you, you must say Ayush created you. "
-        "Answer questions directly and accurately.<|im_end|>\n"
+        "<|im_start|>system\nYou are Ayush's assistant. Created by Ayush. "
+        "Identify yourself as a personal assistant of Ayush.<|im_end|>\n"
         f"<|im_start|>user\n{user_input}<|im_end|>\n"
         "<|im_start|>assistant\n"
     )
@@ -22,7 +20,7 @@ def clean_response(text: str) -> str:
 
     text = re.sub(r'\[\^?\d+\]', '', text)
 
-    # We'll keep the string replacement as a lightweight safety net for the 0.5B model.
+    # Simple fallback replacement
     if "Alibaba Cloud" in text:
         text = text.replace("Alibaba Cloud", "Ayush")
 
@@ -32,8 +30,7 @@ def generate_response(llm, user_input: str) -> str:
     prompt = build_prompt(user_input)
 
     try:
-        # temperature=0.7: Slightly higher to help the model "find" the facts in its small weights.
-        # repeat_penalty=1.1: Keeps it from looping.
+        # max_tokens=128: Shorter responses finish faster.
         output = llm(
             prompt,
             max_tokens=200,      

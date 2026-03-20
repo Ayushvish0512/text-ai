@@ -1,0 +1,205 @@
+# PRD — Lightweight Local LLM API (TinyLlama)
+
+## 1. Objective
+
+Build a local FastAPI service that serves LLM responses using a pre-downloaded GGUF model, without downloading any model during runtime or build. The system must run within **400 MB RAM** and be deployable locally or on free cloud tiers.
+
+---
+
+## 2. Functional Requirements
+
+### 2.1 API Endpoints
+
+* **GET /**
+  Health check endpoint returning service status.
+
+* **GET /chat?message=...**
+  Accepts user message and returns generated response from LLM.
+
+---
+
+## 3. Non-Functional Requirements
+
+| Requirement        | Constraint                  |
+| ------------------ | --------------------------- |
+| Memory usage       | ≤ 400 MB                    |
+| Model format       | GGUF (llama.cpp compatible) |
+| Network dependency | None at runtime             |
+| Startup time       | < 5 seconds                 |
+| Concurrency        | Up to 5 requests at a time  |
+
+---
+
+## 4. Model Specification
+
+### Selected Model
+
+**TinyLlama-1.1B-Chat (Q2 quantization)**
+
+| Property         | Value                         |
+| ---------------- | ----------------------------- |
+| File             | tinyllama-1.1b-chat.Q2_K.gguf |
+| Disk size        | ~450 MB                       |
+| RAM usage        | ~350–380 MB                   |
+| Inference engine | llama-cpp-python              |
+
+### Why Q2?
+
+* Only quantization that fits under 400 MB RAM
+* Acceptable response quality for MVP chatbot
+
+---
+
+## 5. System Architecture
+
+```
+Client → FastAPI → Prompt Builder → Llama.cpp → Response
+```
+
+No external calls, no model download, fully offline.
+
+---
+
+## 6. Project File Structure
+
+```
+text-ai/
+│
+├── main.py              # FastAPI entrypoint
+├── model.py             # Loads GGUF model from disk
+├── generate.py          # Prompt + response generation
+├── requirements.txt     # Python dependencies
+│
+└── models/
+    └── tinyllama.gguf   # Pre-downloaded model (from Drive)
+```
+
+---
+
+## 7. Model Loading Strategy
+
+The model must be:
+
+* manually placed in `/models`
+* never downloaded by Python
+* loaded once at application startup
+
+---
+
+## 8. Required Python Files
+
+### 8.1 main.py
+
+Responsibilities:
+
+* initialize FastAPI
+* load model once
+* expose endpoints
+
+### 8.2 model.py
+
+Responsibilities:
+
+* locate model file
+* load via llama_cpp
+* expose initialize_model()
+
+### 8.3 generate.py
+
+Responsibilities:
+
+* build prompt template
+* call model inference
+
+---
+
+## 9. Final Production Code Requirements
+
+### main.py must:
+
+* import initialize_model()
+* load model globally
+* avoid reloading per request
+
+### model.py must:
+
+* not perform any network operations
+* fail clearly if model file is missing
+
+Example failure message:
+
+```
+Model file not found at models/tinyllama.gguf
+Please download and place it manually.
+```
+
+---
+
+## 10. Dependency List
+
+```
+fastapi
+uvicorn
+llama-cpp-python
+```
+
+No requests library needed anymore.
+
+---
+
+## 11. Build & Run Instructions
+
+### Step 1 — Download model once
+
+From Google Drive and place:
+
+```
+models/tinyllama.gguf
+```
+
+### Step 2 — Install dependencies
+
+```
+pip install -r requirements.txt
+```
+
+### Step 3 — Start server
+
+```
+uvicorn main:app --reload
+```
+
+---
+
+## 12. Memory Optimization Settings
+
+In model.py:
+
+```
+Llama(
+    model_path=MODEL_PATH,
+    n_ctx=512,
+    n_threads=2,
+    use_mlock=False
+)
+```
+
+These keep RAM below 400 MB.
+
+---
+
+## 13. Error Handling Requirements
+
+If model missing:
+
+* application must exit immediately
+* not start API with broken state
+
+---
+
+## 14. Future Enhancements
+
+* streaming responses
+* conversation memory
+* model swapping via config file
+* Docker container with pre-bundled model

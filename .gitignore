@@ -21,6 +21,10 @@ env/
 models/
 Models/
 
+# Ignore specific GGUF downloaded for testing only
+models/*.gguf
+models/*.bin
+
 # Build outputs
 build/
 dist/

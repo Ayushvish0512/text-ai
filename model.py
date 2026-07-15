@@ -44,7 +44,7 @@ def download_model(max_retries: int = 3, retry_sleep_s: int = 5) -> None:
         try:
             print(f"Download attempt {attempt}/{max_retries}...")
             # gdown has its own retry logic; we still wrap it for network flakiness.
-            gdown.download(url, MODEL_PATH, quiet=False, fuzzy=True)
+            gdown.download(url, MODEL_PATH, quiet=False)
             if not _model_is_present_and_valid():
                 raise RuntimeError(
                     f"Download finished but file is still missing/too small. "

@@ -1,13 +1,27 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import subprocess
 import os
 
+from fastapi.middleware.cors import CORSMiddleware
+
+
 app = FastAPI()
+
+# Allow your other website domain(s) to call this API from the browser
+# Change origins to your real domains when deploying.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 MODEL_PATH = "models/distilgpt2-q4_k_m.gguf"
 LLAMA_BIN = "llama.cpp/main"
+
 
 class Prompt(BaseModel):
     text: str
@@ -16,13 +30,11 @@ class Prompt(BaseModel):
 
 @app.get("/")
 def health():
-    # Keep a small JSON response for health checks
     return {"status": "running"}
 
 
 @app.get("/chat")
 def chat_page() -> HTMLResponse:
-    # Serve a simple web chat UI
     page_path = os.path.join(os.path.dirname(__file__), "chat_page.html")
     with open(page_path, "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())

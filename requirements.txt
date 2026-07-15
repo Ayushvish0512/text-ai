@@ -1,3 +1,4 @@
 fastapi
 uvicorn
-pydantic
+llama-cpp-python
+gdown

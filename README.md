@@ -46,6 +46,29 @@ Visit `http://127.0.0.1:8000/chat` to start chatting.
 3. **Start Command:**
    - `./start.sh`
 
+### Render Environment Setup (Required)
+
+To make the server work on Render, set these environment variables:
+
+- **`DOWNLOAD_MODEL`**: `1`
+  - Enables GGUF download at startup (via `model.py` `ensure_model_downloaded()`).
+  - If set to `0` or missing, the app will fail with “Model file not found …”.
+
+- **`PORT`**: (Render usually sets this automatically)
+  - Used by `start.sh` to run Uvicorn: `uvicorn main:app --port $PORT`
+  - You do not need to hardcode it, but it must exist.
+
+- **`PYTHON_VERSION`**: `3.10.0` or higher
+  - Required for compatibility with the app/runtime expectations.
+
+Commands to configure in Render:
+
+- **Build Command**:
+  - `pip install -r requirements.txt`
+
+- **Start Command**:
+  - `./start.sh`
+
 ## API Reference
 
 ### GET `/`

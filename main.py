@@ -14,10 +14,16 @@ state = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize model once at startup
-    # This will fail fast if model is missing and DOWNLOAD_MODEL=0
-    state["llm"] = initialize_model()
+    # Initialize model once at startup, but do not kill the whole server on failure.
+    try:
+        state["llm"] = initialize_model()
+        state["model_status"] = "loaded"
+    except Exception as e:  # noqa: BLE001
+        state["llm"] = None
+        state["model_status"] = f"failed: {e}"
+
     yield
+
     # Cleanup
     state.clear()
 
@@ -38,7 +44,10 @@ class Prompt(BaseModel):
 
 @app.get("/")
 def health():
-    return {"status": "running", "model": "loaded" if "llm" in state else "loading"}
+    return {
+        "status": "running",
+        "model_status": state.get("model_status", "loading"),
+    }
 
 @app.get("/chat")
 def chat_page() -> HTMLResponse:

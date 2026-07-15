@@ -23,6 +23,12 @@ env/
 models/*.gguf
 models/*.bin
 
+# Keep the Models/ directory visible on GitHub (but still ignore any large model files inside)
+!Models/
+!Models/.gitkeep
+models/*
+
+
 # Build outputs
 build/
 dist/

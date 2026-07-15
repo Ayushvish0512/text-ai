@@ -18,8 +18,6 @@ env/
 *.log
 
 # LLM artifacts / local model binaries (large)
-models/
-Models/
 
 # Ignore specific GGUF downloaded for testing only
 models/*.gguf

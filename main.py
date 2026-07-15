@@ -1,111 +1,81 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, StreamingResponse
-from pydantic import BaseModel
-import subprocess
 import os
-from typing import Iterator
-
-# Optional model download support (Render/testing)
-from model import download_model
-
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+from typing import AsyncGenerator
 
+from model import initialize_model
+from generate import build_prompt, clean_chunk
 
-app = FastAPI()
+# Global state
+state = {}
 
-# Allow your other website domain(s) to call this API from the browser
-# Change origins to your real domains when deploying.
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize model once at startup
+    # This will fail fast if model is missing and DOWNLOAD_MODEL=0
+    state["llm"] = initialize_model()
+    yield
+    # Cleanup
+    state.clear()
+
+app = FastAPI(lifespan=lifespan)
+
+# Secure CORS: Replace "*" with specific domains in production
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
-MODEL_PATH = "models/distilgpt2-q4_k_m.gguf"
-LLAMA_BIN = "llama.cpp/main"
-
-
 class Prompt(BaseModel):
-    text: str
-    max_length: int = 50
-
+    text: str = Field(..., max_length=1000)
+    max_length: int = Field(128, ge=1, le=512)
 
 @app.get("/")
 def health():
-    return {"status": "running"}
-
+    return {"status": "running", "model": "loaded" if "llm" in state else "loading"}
 
 @app.get("/chat")
 def chat_page() -> HTMLResponse:
-    page_path = os.path.join(os.path.dirname(__file__), "chat_page.html")
-    with open(page_path, "r", encoding="utf-8") as f:
-        return HTMLResponse(f.read())
-
+    # Use absolute path relative to this file
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    page_path = os.path.join(base_dir, "chat_page.html")
+    try:
+        with open(page_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(f.read())
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="chat_page.html not found")
 
 @app.post("/generate")
-def generate(prompt: Prompt):
-    def stream() -> Iterator[str]:
-        if not os.path.exists(MODEL_PATH):
-            if os.getenv("DOWNLOAD_MODEL", "0") == "1":
-                try:
-                    # Downloads into ./models/ using gdown (network only when enabled)
-                    download_model()
-                except Exception as e:
-                    raise HTTPException(
-                        status_code=500,
-                        detail=f"Model download failed: {e}",
-                    )
+async def generate(prompt: Prompt):
+    llm = state.get("llm")
+    if not llm:
+        # This shouldn't happen due to lifespan, but good for safety
+        return StreamingResponse(iter(["[error] Model not loaded."]), media_type="text/plain")
 
-            if not os.path.exists(MODEL_PATH):
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Model file not found at {MODEL_PATH}. Please download and place it manually.",
-                )
+    full_prompt = build_prompt(prompt.text)
 
-        n_tokens = str(min(prompt.max_length, 100))
-        args = [
-            LLAMA_BIN,
-            "-m",
-            MODEL_PATH,
-            "-p",
-            prompt.text,
-            "-n",
-            n_tokens,
-            "--temp",
-            "0.7",
-            "--ctx-size",
-            "128",
-            "--no-display-prompt",
-        ]
-
+    async def stream_generator() -> AsyncGenerator[str, None]:
         try:
-            # Stream stdout progressively
-            proc = subprocess.Popen(
-                args,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,  # line-buffered
+            # Token-by-token streaming
+            response_iter = llm.create_completion(
+                prompt=full_prompt,
+                max_tokens=prompt.max_length,
+                stream=True,
+                temperature=0.7,
+                stop=["<|im_end|>", "<|im_start|>", "<|endoftext|>"]
             )
 
-            start_cmd_failed = False
-            for line in proc.stdout:  # type: ignore[union-attr]
-                # yield as soon as there is output
-                yield line
-
-            ret = proc.wait(timeout=1)
-            if ret != 0:
-                # If llama.cpp exits non-zero, surface what we got (if any)
-                if not start_cmd_failed:
-                    yield ""
-        except subprocess.TimeoutExpired:
-            yield "\n[error] Generation timed out."
-        except FileNotFoundError:
-            yield "\n[error] llama.cpp binary not found. Expected: " + LLAMA_BIN
+            for chunk in response_iter:
+                token = chunk["choices"][0]["text"]
+                if token:
+                    yield clean_chunk(token)
         except Exception as e:
-            yield "\n[error] " + str(e)
+            yield f"\n[error] Generation failed: {str(e)}"
 
-    return StreamingResponse(stream(), media_type="text/plain; charset=utf-8")
-
+    return StreamingResponse(stream_generator(), media_type="text/plain; charset=utf-8")

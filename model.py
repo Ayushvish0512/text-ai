@@ -1,11 +1,11 @@
-# model.py
-
 import os
-import sys
 import gc
+import sys
 
-# Constants
-MODEL_PATH = os.path.join("models", "qwen2.5-0.5b-instruct-q2_k.gguf")
+# Standardize Model Path
+MODEL_DIR = "models"
+MODEL_FILENAME = "qwen2.5-0.5b-instruct-q2_k.gguf"
+MODEL_PATH = os.path.join(MODEL_DIR, MODEL_FILENAME)
 FILE_ID = "1iwluL_LzkdMxx7VgUw3gaCxDectPCTo8"
 
 def download_model():
@@ -17,35 +17,40 @@ def download_model():
             return
         os.remove(MODEL_PATH)
 
-    os.makedirs("models", exist_ok=True)
-    print("Model file missing. Downloading from Google Drive...")
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    print(f"Model file missing. Downloading {MODEL_FILENAME}...")
     
     try:
         import gdown
         url = f"https://drive.google.com/uc?id={FILE_ID}"
         gdown.download(url, MODEL_PATH, quiet=False, fuzzy=True)
+        if not os.path.exists(MODEL_PATH):
+            raise RuntimeError("Download completed but file is missing.")
     except ImportError:
-        print("Error: gdown not installed. Please install it or place the model manually.")
-        sys.exit(1)
+        raise ImportError("gdown not installed. Please install it or place the model manually.")
     except Exception as e:
-        print(f"Download failed: {e}")
-        sys.exit(1)
+        raise RuntimeError(f"Download failed: {e}")
 
 def initialize_model():
     """
     Load the model with extreme memory constraints for Render's 400MB limit.
     """
-    # Auto-download if missing
     if not os.path.exists(MODEL_PATH):
-        download_model()
+        if os.getenv("DOWNLOAD_MODEL", "0") == "1":
+            download_model()
+        else:
+            print(f"CRITICAL: Model file not found at {MODEL_PATH}")
+            print("Set DOWNLOAD_MODEL=1 or place the model manually.")
+            sys.exit(1) # Fail fast on startup
 
     gc.collect()
 
     from llama_cpp import Llama
     
-    # RAM Optimizations:
-    # n_ctx=512: Balanced for prompt/answer space.
-    # n_batch=32: Small batch to prevent spikes.
+    # RAM Optimizations for 400MB limit:
+    # n_ctx=512: Small context to save KV cache RAM.
+    # n_threads=2: CPU limit for Render free tier.
+    # use_mmap=True: Map model into memory (essential for low RAM).
     try:
         llm = Llama(
             model_path=MODEL_PATH,
@@ -57,7 +62,6 @@ def initialize_model():
             verbose=False,
             logits_all=False
         )
-        print("Model loaded successfully.")
         return llm
     except Exception as e:
         print(f"Critical error loading model: {e}")

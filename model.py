@@ -64,16 +64,22 @@ def download_model(max_retries: int = 3, retry_sleep_s: int = 5) -> None:
 def ensure_model_downloaded() -> None:
     """
     Ensures the GGUF exists on disk if DOWNLOAD_MODEL=1.
-    This is safe to call from Render start scripts (before uvicorn).
+    Safe to call from Render start scripts (before uvicorn) and from app startup.
     """
+    download_flag = os.getenv("DOWNLOAD_MODEL", "0")
+    print(f"[model] ensure_model_downloaded(): DOWNLOAD_MODEL={download_flag}")
+    print(f"[model] ensure_model_downloaded(): expecting {MODEL_PATH}")
+
     if _model_is_present_and_valid():
+        print(f"[model] Model already present/valid: {MODEL_PATH}")
         return
 
-    if os.getenv("DOWNLOAD_MODEL", "0") != "1":
-        print(f"CRITICAL: Model file not found at {MODEL_PATH}")
-        print("Set DOWNLOAD_MODEL=1 or place the model manually.")
+    if download_flag != "1":
+        print(f"[model] CRITICAL: Model file not found at {MODEL_PATH}")
+        print("[model] Set DOWNLOAD_MODEL=1 or place the model manually.")
         raise FileNotFoundError(MODEL_PATH)
 
+    print("[model] Model missing/invalid; starting download...")
     download_model()
 
 def initialize_model():

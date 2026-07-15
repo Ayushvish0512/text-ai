@@ -56,17 +56,27 @@
     chat.scrollTop = chat.scrollHeight;
   }
 
-  async function generate(text){
+  async function generateStream(text, onChunk){
     const res = await fetch('/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, max_length: 150 })
     });
+
     if(!res.ok){
       const t = await res.text();
       throw new Error('HTTP ' + res.status + ': ' + t);
     }
-    return res.json();
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+
+    while(true){
+      const { value, done } = await reader.read();
+      if(done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      if(chunk) onChunk(chunk);
+    }
   }
 
   async function onSend(){
@@ -78,13 +88,31 @@
     send.disabled = true;
     statusEl.textContent = 'Generating...';
 
+    // Create bot bubble immediately and append streamed chunks
+    const wrap = document.createElement('div');
+    wrap.className = 'msg bot';
+
+    const roleEl = document.createElement('div');
+    roleEl.className = 'role';
+    roleEl.textContent = 'Bot';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.textContent = '';
+
+    wrap.appendChild(roleEl);
+    wrap.appendChild(bubble);
+    chat.appendChild(wrap);
+    chat.scrollTop = chat.scrollHeight;
+
     try{
-      const data = await generate(text);
-      const reply = data.response ?? data.error ?? JSON.stringify(data);
-      addMsg('bot', reply);
+      await generateStream(text, (chunk) => {
+        bubble.textContent += chunk;
+        chat.scrollTop = chat.scrollHeight;
+      });
       statusEl.textContent = '';
     }catch(e){
-      addMsg('bot', 'Error: ' + e.message);
+      bubble.textContent = 'Error: ' + e.message;
       statusEl.textContent = '';
     }finally{
       send.disabled = false;

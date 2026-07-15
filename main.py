@@ -1,8 +1,12 @@
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 import subprocess
 import os
+from typing import Iterator
+
+# Optional model download support (Render/testing)
+from model import download_model
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -42,27 +46,66 @@ def chat_page() -> HTMLResponse:
 
 @app.post("/generate")
 def generate(prompt: Prompt):
-    try:
-        result = subprocess.run(
-            [
-                LLAMA_BIN,
-                "-m",
-                MODEL_PATH,
-                "-p",
-                prompt.text,
-                "-n",
-                str(min(prompt.max_length, 100)),
-                "--temp",
-                "0.7",
-                "--ctx-size",
-                "128",
-                "--no-display-prompt",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        return {"response": result.stdout.strip()}
-    except Exception as e:
-        return {"error": str(e)}
+    def stream() -> Iterator[str]:
+        if not os.path.exists(MODEL_PATH):
+            if os.getenv("DOWNLOAD_MODEL", "0") == "1":
+                try:
+                    # Downloads into ./models/ using gdown (network only when enabled)
+                    download_model()
+                except Exception as e:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Model download failed: {e}",
+                    )
+
+            if not os.path.exists(MODEL_PATH):
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Model file not found at {MODEL_PATH}. Please download and place it manually.",
+                )
+
+        n_tokens = str(min(prompt.max_length, 100))
+        args = [
+            LLAMA_BIN,
+            "-m",
+            MODEL_PATH,
+            "-p",
+            prompt.text,
+            "-n",
+            n_tokens,
+            "--temp",
+            "0.7",
+            "--ctx-size",
+            "128",
+            "--no-display-prompt",
+        ]
+
+        try:
+            # Stream stdout progressively
+            proc = subprocess.Popen(
+                args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,  # line-buffered
+            )
+
+            start_cmd_failed = False
+            for line in proc.stdout:  # type: ignore[union-attr]
+                # yield as soon as there is output
+                yield line
+
+            ret = proc.wait(timeout=1)
+            if ret != 0:
+                # If llama.cpp exits non-zero, surface what we got (if any)
+                if not start_cmd_failed:
+                    yield ""
+        except subprocess.TimeoutExpired:
+            yield "\n[error] Generation timed out."
+        except FileNotFoundError:
+            yield "\n[error] llama.cpp binary not found. Expected: " + LLAMA_BIN
+        except Exception as e:
+            yield "\n[error] " + str(e)
+
+    return StreamingResponse(stream(), media_type="text/plain; charset=utf-8")
 

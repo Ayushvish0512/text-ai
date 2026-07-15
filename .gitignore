@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Environment / secrets
+.env
+.env.*
+*.env
+
+# FastAPI / temp files
+*.log
+
+# LLM artifacts / local model binaries (large)
+models/
+Models/
+
+# Build outputs
+build/
+dist/
+*.egg-info/
+*.egg
+
+# C/C++ build artifacts (if you compile llama.cpp)
+llama.cpp/build/
+llama.cpp/**/*.o
+llama.cpp/**/*.obj
+llama.cpp/**/*.exe
+llama.cpp/**/*.dll
+llama.cpp/**/*.pdb
+
+# OS files
+.DS_Store
+Thumbs.db
